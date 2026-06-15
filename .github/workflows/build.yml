@@ -1,0 +1,87 @@
+name: Build SerialBridge
+
+# -------------------------------------------------------
+# 配置シナリオ
+#   A) このディレクトリ (SerialBridge/) を独立リポジトリとして
+#      GitHub に push した場合 → SLN_PATH = SerialBridge.sln
+#   B) KartePaste モノレポの一部として push した場合
+#      → SLN_PATH = SerialBridge/SerialBridge.sln
+#
+# 現在は A) 独立リポジトリ想定（SerialBridge/ をリポジトリルートとする）。
+# B) に変える場合は env.SLN_PATH と paths フィルタを変更してください。
+# -------------------------------------------------------
+
+env:
+  SLN_PATH: SerialBridge.sln          # A) 独立リポジトリ
+  OUT_EXE:  build_output\SerialBridge.exe
+
+on:
+  push:
+    branches: [ "main", "master" ]
+  pull_request:
+    branches: [ "main", "master" ]
+  workflow_dispatch:
+    inputs:
+      configuration:
+        description: "Build configuration"
+        required: false
+        default: "Release"
+        type: choice
+        options:
+          - Release
+          - Debug
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+      # -------------------------------------------------------
+      # 1. チェックアウト
+      # -------------------------------------------------------
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # -------------------------------------------------------
+      # 2. MSBuild セットアップ
+      #    Visual Studio 2022 (windows-latest) に同梱された
+      #    MSBuild を PATH に追加する公式アクション。
+      # -------------------------------------------------------
+      - name: Setup MSBuild
+        uses: microsoft/setup-msbuild@v2
+
+      # -------------------------------------------------------
+      # 3. NuGet パッケージの復元
+      #    今回は外部 NuGet 参照なし（GAC アセンブリのみ）だが
+      #    今後の拡張に備えてステップを置いておく。
+      # -------------------------------------------------------
+      - name: Restore NuGet packages
+        run: nuget restore ${{ env.SLN_PATH }}
+        continue-on-error: true   # packages.config がなくても落とさない
+
+      # -------------------------------------------------------
+      # 4. ビルド（Release / Debug）
+      #    /p:OutputPath は .csproj から見た相対パス。
+      #    .csproj が SerialBridge\SerialBridge.csproj にあるため
+      #    ..\build_output\ = リポジトリルート直下の build_output\
+      # -------------------------------------------------------
+      - name: Build with MSBuild
+        run: >
+          msbuild ${{ env.SLN_PATH }}
+          /p:Configuration=${{ github.event.inputs.configuration || 'Release' }}
+          /p:Platform=AnyCPU
+          /p:OutputPath=..\build_output\
+          /m
+          /nologo
+          /verbosity:minimal
+
+      # -------------------------------------------------------
+      # 5. exe をアーティファクトとしてアップロード
+      # -------------------------------------------------------
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: SerialBridge-${{ github.event.inputs.configuration || 'Release' }}
+          path: ${{ env.OUT_EXE }}
+          if-no-files-found: error
+          retention-days: 90

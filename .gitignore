@@ -1,0 +1,10 @@
+# ビルド成果物
+SerialBridge/bin/
+SerialBridge/obj/
+build_output/
+*.user
+*.suo
+.vs/
+
+# macOS
+.DS_Store
