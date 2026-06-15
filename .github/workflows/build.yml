@@ -66,8 +66,12 @@ jobs:
       #    ..\build_output\ = リポジトリルート直下の build_output\
       # -------------------------------------------------------
       - name: Build with MSBuild
+        # .sln ではなく .csproj を直接ビルドする。
+        # ソリューションのプラットフォーム名は "Any CPU"(空白あり) だが
+        # プロジェクトの Platform は "AnyCPU"(空白なし)。.csproj を対象にすれば
+        # /p:Platform=AnyCPU がそのまま有効で MSB4126 を回避できる。
         run: >
-          msbuild ${{ env.SLN_PATH }}
+          msbuild SerialBridge\SerialBridge.csproj
           /p:Configuration=${{ github.event.inputs.configuration || 'Release' }}
           /p:Platform=AnyCPU
           /p:OutputPath=..\build_output\
