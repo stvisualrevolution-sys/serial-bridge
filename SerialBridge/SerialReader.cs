@@ -97,10 +97,17 @@ namespace SerialBridge
                         Encoding        = Encoding.UTF8,
                         ReadTimeout     = ReadTimeoutMs,
                         WriteTimeout    = 1000,
+                        // いったん両方 OFF で開く（下で ON にする「順番」を確実にするため）
                         DtrEnable       = false,
                         RtsEnable       = false,
                     };
                     _port.Open();
+                    // AtomS3(ESP32 TinyUSB) は DTR と RTS が両方 ON のときだけ「PC 接続済み」とみなし CDC 送信する
+                    // （OFF のままだと HID 打鍵に切り替わる）。
+                    // 順番が大事: 必ず DTR → RTS の順に ON にする。RTS だけが先に ON になると、ESP32 側が
+                    // 「書き込みモードへの再起動手順の途中」と解釈し、接続済みにならないことがある。
+                    _port.DtrEnable = true;
+                    _port.RtsEnable = true;
                     _currentPort = portName;
                     AppLogger.Info($"Opened {portName} at {BaudRate} baud");
                     NotifyStatus(portName, true, "接続中", _receiveCount);
@@ -187,7 +194,8 @@ namespace SerialBridge
             // "SOAP:" プレフィックスを検証
             if (!text.StartsWith(SoapPrefix, StringComparison.Ordinal))
             {
-                AppLogger.Warn($"Unknown prefix. Ignoring. (first 40 chars: {Truncate(text, 40)})");
+                // 途中から届いたカルテ本文の可能性があるため、中身はログに残さない。文字数だけを記録する。
+                AppLogger.Warn($"Unknown prefix. Ignoring. ({text.Length} chars)");
                 return;
             }
 
@@ -198,7 +206,8 @@ namespace SerialBridge
                 return;
             }
 
-            AppLogger.Info($"SOAP received ({body.Length} chars): {Truncate(body, 80)}");
+            // カルテ本文（患者情報）はログに残さない。文字数だけを記録する。
+            AppLogger.Info($"SOAP received ({body.Length} chars)");
 
             // クリップボードは STA スレッドで設定する
             SetClipboard(body);
